@@ -4,7 +4,9 @@ const NAMESPACE = "http://koop.overheid.nl/apps/opera/";
 const DATE_FAR_FUTURE = "9999-12-31";
 const ANIMATION_INTERVAL_MS = 4000;
 const TRANSITION_DURATION_MS = 700;
+const DEFAULT_STATUS_MESSAGE = "Select a scenario to begin.";
 
+const scenarioSelect = document.getElementById("scenarioSelect");
 const folderInput = document.getElementById("folderInput");
 const prevButton = document.getElementById("prevButton");
 const playPauseButton = document.getElementById("playPauseButton");
@@ -32,12 +34,59 @@ const axisGroup = svg
 
 const instrumentsGroup = svg.append("g").attr("class", "instruments");
 
+// Add gradient and marker definitions for open-ended regulations
+const defs = svg.append("defs");
+
+const gradient = defs.append("linearGradient")
+  .attr("id", "openEndedGradient")
+  .attr("x1", "0%")
+  .attr("y1", "0%")
+  .attr("x2", "100%")
+  .attr("y2", "0%");
+
+gradient.append("stop")
+  .attr("offset", "0%")
+  .attr("stop-color", "#5c6bf0")
+  .attr("stop-opacity", 0.9);
+
+gradient.append("stop")
+  .attr("offset", "70%")
+  .attr("stop-color", "#5c6bf0")
+  .attr("stop-opacity", 0.9);
+
+gradient.append("stop")
+  .attr("offset", "100%")
+  .attr("stop-color", "#7c8cf0")
+  .attr("stop-opacity", 0.6);
+
+// Arrow marker for open-ended regulations (pointing down)
+defs.append("marker")
+  .attr("id", "arrowhead")
+  .attr("viewBox", "0 0 10 10")
+  .attr("refX", "5")
+  .attr("refY", "9")
+  .attr("markerWidth", "8")
+  .attr("markerHeight", "8")
+  .attr("orient", "0deg")
+  .append("path")
+  .attr("d", "M 0 0 L 5 10 L 10 0 z")
+  .attr("fill", "#5c6bf0");
+
 let snapshots = [];
 let activeIndex = 0;
 let animationHandle = null;
 let isPlaying = false;
+let activeScenarioName = "";
+let scenarioManifest = null;
 
-folderInput.addEventListener("change", handleFolderSelection);
+if (scenarioSelect) {
+  scenarioSelect.addEventListener("change", handleScenarioSelect);
+}
+
+if (folderInput) {
+  folderInput.addEventListener("change", handleFolderSelection);
+}
+
 prevButton.addEventListener("click", () => {
   stopPlayback();
   goToSnapshot(activeIndex - 1);
@@ -53,16 +102,28 @@ window.addEventListener("beforeunload", () => {
   tooltip.remove();
 });
 
-function setControlsEnabled(enabled) {
-  prevButton.disabled = !enabled;
-  nextButton.disabled = !enabled;
-  playPauseButton.disabled = !enabled;
-  playPauseButton.textContent = "Play";
+initializeScenarioManifest();
+
+function updateControlsState() {
+  const hasSnapshots = snapshots.length > 0;
+  const hasMultipleSnapshots = snapshots.length > 1;
+
+  prevButton.disabled = !hasMultipleSnapshots;
+  nextButton.disabled = !hasMultipleSnapshots;
+  playPauseButton.disabled = !hasMultipleSnapshots;
+
+  if (!hasMultipleSnapshots) {
+    stopPlayback();
+  }
+
+  if (!hasSnapshots) {
+    playPauseButton.textContent = "Play";
+  }
 }
 
 async function handleFolderSelection(event) {
   stopPlayback();
-  statusMessage.textContent = "Reading XML timelines…";
+  statusMessage.textContent = "Loading scenario…";
 
   const files = Array.from(event.target.files || []).filter((file) =>
     file.name.toLowerCase().endsWith(".xml"),
@@ -70,53 +131,304 @@ async function handleFolderSelection(event) {
 
   if (!files.length) {
     snapshots = [];
+    activeScenarioName = "";
     clearVisualization();
-    statusMessage.textContent = "No XML files found in the selected folder.";
-    setControlsEnabled(false);
+    statusMessage.textContent = "No XML files found in the selected scenario folder.";
+    updateControlsState();
     return;
   }
 
-  files.sort((a, b) => a.name.localeCompare(b.name, "en"));
-
-  const parsedSnapshots = [];
-  for (const file of files) {
-    try {
-      const xmlText = await file.text();
-      parsedSnapshots.push(parseTimelineXml(xmlText, file));
-    } catch (error) {
-      console.error(error);
-      statusMessage.textContent = `Failed to parse ${file.name}: ${error.message}`;
-      setControlsEnabled(false);
-      return;
-    }
+  if (scenarioSelect) {
+    scenarioSelect.value = "";
   }
 
-  const usableSnapshots = parsedSnapshots.filter(
-    (snapshot) => snapshot.instruments.length > 0,
+  try {
+    const scenario = groupScenarioFiles(files);
+    const stateEntries = Array.from(scenario.states.values()).sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+    );
+
+    const stateGroups = stateEntries.map((entry) => ({
+      stateName: entry.name,
+      files: entry.files,
+    }));
+
+    await loadScenarioFromStateGroups({
+      scenarioName: scenario.name,
+      stateGroups,
+    });
+  } catch (error) {
+    console.error(error);
+    snapshots = [];
+    activeScenarioName = "";
+    clearVisualization();
+    statusMessage.textContent = `Failed to load scenario: ${error.message}`;
+    updateControlsState();
+  }
+}
+
+async function handleScenarioSelect(event) {
+  const scenarioId = event.target.value;
+
+  if (!scenarioId) {
+    snapshots = [];
+    activeScenarioName = "";
+    stopPlayback();
+    clearVisualization();
+    statusMessage.textContent = DEFAULT_STATUS_MESSAGE;
+    updateControlsState();
+    return;
+  }
+
+  if (!scenarioManifest) {
+    statusMessage.textContent = "No scenario manifest is available.";
+    return;
+  }
+
+  const scenarioEntry = scenarioManifest.scenarios.find(
+    (scenario) => scenario.id === scenarioId,
   );
 
-  if (!usableSnapshots.length) {
-    snapshots = [];
-    clearVisualization();
-    statusMessage.textContent =
-      "No usable timeline entries were found in the selected XML files.";
-    setControlsEnabled(false);
+  if (!scenarioEntry) {
+    statusMessage.textContent = "Selected scenario is not listed in the manifest.";
     return;
   }
 
-  snapshots = usableSnapshots;
-  activeIndex = 0;
-  renderSnapshot(snapshots[activeIndex]);
-  setControlsEnabled(true);
+  try {
+    statusMessage.textContent = `Loading scenario ${scenarioEntry.label || scenarioEntry.id}…`;
 
-  const firstDate = snapshots[0].meta.publicationDate;
-  const lastDate = snapshots[snapshots.length - 1].meta.publicationDate;
-  const dateFormat = d3.timeFormat("%Y-%m-%d");
-  const rangeDescription =
-    firstDate && lastDate
-      ? `${dateFormat(firstDate)} → ${dateFormat(lastDate)}`
-      : "timeline snapshots";
-  statusMessage.textContent = `Loaded ${snapshots.length} timeline snapshots (${rangeDescription}).`;
+    if (folderInput) {
+      folderInput.value = "";
+    }
+
+    const scenarioBasePath = `${scenarioManifest.basePath}/${scenarioEntry.id}`.replace(
+      /\/{2,}/g,
+      "/",
+    );
+
+    const stateGroups = [];
+    for (const state of scenarioEntry.states) {
+      const files = await Promise.all(
+        (state.files || []).map((filePath) =>
+          fetchScenarioFile({
+            scenarioBasePath,
+            scenarioId: scenarioEntry.id,
+            filePath,
+          }),
+        ),
+      );
+      stateGroups.push({
+        stateName: state.label || state.id,
+        files,
+      });
+    }
+
+    await loadScenarioFromStateGroups({
+      scenarioName: scenarioEntry.label || scenarioEntry.id,
+      stateGroups,
+    });
+  } catch (error) {
+    console.error(error);
+    snapshots = [];
+    activeScenarioName = "";
+    clearVisualization();
+    statusMessage.textContent = `Failed to load scenario: ${error.message}`;
+    updateControlsState();
+  }
+}
+
+async function initializeScenarioManifest() {
+  if (!scenarioSelect) {
+    return;
+  }
+
+  try {
+    const response = await fetch("sample-data/scenarios/index.json", {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} while loading scenario manifest.`);
+    }
+
+    const rawManifest = await response.json();
+    scenarioManifest = normalizeScenarioManifest(rawManifest);
+    populateScenarioSelect();
+  } catch (error) {
+    console.warn("Scenario manifest could not be loaded.", error);
+    scenarioManifest = null;
+    if (scenarioSelect) {
+      scenarioSelect.disabled = true;
+      scenarioSelect.innerHTML =
+        '<option value="">No scenarios available (manifest missing)</option>';
+    }
+    if (statusMessage && statusMessage.textContent === DEFAULT_STATUS_MESSAGE) {
+      statusMessage.textContent =
+        "Scenario dropdown unavailable (manifest missing). Use the folder loader instead.";
+    }
+  }
+}
+
+function normalizeScenarioManifest(rawManifest) {
+  const basePath =
+    typeof rawManifest?.basePath === "string" && rawManifest.basePath.trim()
+      ? rawManifest.basePath.trim().replace(/\/+$/, "")
+      : "sample-data/scenarios";
+
+  const scenarios = Array.isArray(rawManifest?.scenarios)
+    ? rawManifest.scenarios
+        .map((scenario) => {
+          const id = scenario?.id || scenario?.slug || scenario?.name;
+          if (!id) {
+            return null;
+          }
+          const label = scenario?.label || scenario?.title || id;
+          const states = Array.isArray(scenario?.states)
+            ? scenario.states
+                .map((state) => {
+                  const stateId = state?.id || state?.name;
+                  if (!stateId) {
+                    return null;
+                  }
+                  const files = Array.isArray(state?.files)
+                    ? state.files
+                        .map((filePath) => String(filePath || "").trim())
+                        .filter(Boolean)
+                    : [];
+                  if (!files.length) {
+                    return null;
+                  }
+                  return {
+                    id: stateId,
+                    label: state?.label || stateId,
+                    files,
+                  };
+                })
+                .filter(Boolean)
+            : [];
+
+          if (!states.length) {
+            return null;
+          }
+
+          return {
+            id,
+            label,
+            states,
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  return {
+    basePath,
+    scenarios,
+  };
+}
+
+function populateScenarioSelect() {
+  if (!scenarioSelect) {
+    return;
+  }
+
+  scenarioSelect.innerHTML = "";
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "Select scenario…";
+  scenarioSelect.append(defaultOption);
+
+  if (!scenarioManifest || !scenarioManifest.scenarios.length) {
+    scenarioSelect.disabled = true;
+    defaultOption.textContent = "No scenarios available";
+    return;
+  }
+
+  scenarioManifest.scenarios.forEach((scenario) => {
+    const option = document.createElement("option");
+    option.value = scenario.id;
+    option.textContent = scenario.label;
+    scenarioSelect.append(option);
+  });
+
+  scenarioSelect.disabled = false;
+}
+
+async function loadScenarioFromStateGroups({ scenarioName, stateGroups }) {
+  if (!Array.isArray(stateGroups) || !stateGroups.length) {
+    snapshots = [];
+    activeScenarioName = scenarioName;
+    stopPlayback();
+    clearVisualization();
+    statusMessage.textContent = "No state folders were found inside the scenario.";
+    updateControlsState();
+    return;
+  }
+
+  stopPlayback();
+
+  try {
+    const builtSnapshots = [];
+    let totalXmlFiles = 0;
+
+    for (const group of stateGroups) {
+      const files = group.files || [];
+      totalXmlFiles += files.length;
+      const result = await buildSnapshotFromState({
+        scenarioName,
+        stateName: group.stateName,
+        files,
+      });
+      if (result.instruments.length > 0) {
+        builtSnapshots.push(result);
+      }
+    }
+
+    if (!builtSnapshots.length) {
+      snapshots = [];
+      activeScenarioName = scenarioName;
+      clearVisualization();
+      statusMessage.textContent = "No usable timeline entries were found in the scenario.";
+      updateControlsState();
+      return;
+    }
+
+    snapshots = builtSnapshots;
+    activeScenarioName = scenarioName;
+    activeIndex = 0;
+    renderSnapshot(snapshots[activeIndex]);
+    updateControlsState();
+    statusMessage.textContent = `Loaded scenario ${scenarioName} with ${snapshots.length} state${snapshots.length === 1 ? "" : "s"} (${totalXmlFiles} XML files).`;
+  } catch (error) {
+    snapshots = [];
+    activeScenarioName = scenarioName;
+    clearVisualization();
+    statusMessage.textContent = `Failed to load scenario: ${error.message}`;
+    updateControlsState();
+    throw error;
+  }
+}
+
+async function fetchScenarioFile({ scenarioBasePath, scenarioId, filePath }) {
+  const cleanedScenarioBase = scenarioBasePath.replace(/\/+$/, "");
+  const normalizedPath = String(filePath || "").replace(/^\/+/, "");
+  const url = `${cleanedScenarioBase}/${normalizedPath}`;
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`Unable to fetch ${normalizedPath} (HTTP ${response.status})`);
+  }
+
+  const content = await response.text();
+  const segments = normalizedPath.split(/[/\\]+/);
+  const fileName = segments[segments.length - 1] || normalizedPath;
+  const relativePath = `${scenarioId}/${normalizedPath}`;
+
+  return {
+    name: fileName,
+    webkitRelativePath: relativePath,
+    async text() {
+      return content;
+    },
+  };
 }
 
 function parseTimelineXml(xmlText, file) {
@@ -135,7 +447,7 @@ function parseTimelineXml(xmlText, file) {
     instrumentType: textForTag(metadataNode, "instrument-type"),
     deliveryId: textForTag(metadataNode, "id-levering"),
     supplyTime: parseDate(textForTag(metadataNode, "aanlevering-tijd")),
-    sourceFile: file.name,
+    sourceFile: file.webkitRelativePath || file.name,
   };
 
   const instrumentNodes = Array.from(
@@ -197,29 +509,171 @@ function parseTimelineXml(xmlText, file) {
         instrumentId,
         instrumentType,
         displayName: buildInstrumentLabel(instrumentId, instrumentType),
-        versions: filteredVersions.sort((a, b) => {
-          const order = (a.validFrom || 0) - (b.validFrom || 0);
-          if (order !== 0) {
-            return order;
-          }
-          return (a.versionNumber || 0) - (b.versionNumber || 0);
-        }),
+        versions: filteredVersions.sort(compareVersions),
       };
     })
     .filter(Boolean)
-    .sort((a, b) => {
-      const typeWeight = (type) => (type === "regeling" ? 0 : type === "informatie-object" ? 1 : 2);
-      const weightDiff = typeWeight(a.instrumentType) - typeWeight(b.instrumentType);
-      if (weightDiff !== 0) {
-        return weightDiff;
-      }
-      return a.displayName.localeCompare(b.displayName, "en");
-    });
+    .sort(compareInstruments);
 
   return {
     meta,
     instruments,
   };
+}
+
+function groupScenarioFiles(files) {
+  const states = new Map();
+  let scenarioName = "";
+
+  for (const file of files) {
+    const segments = splitPathSegments(file.webkitRelativePath || file.name);
+    if (segments.length < 3) {
+      continue;
+    }
+
+    if (!scenarioName) {
+      scenarioName = segments[0];
+    }
+
+    const stateName = segments[1];
+    if (!states.has(stateName)) {
+      states.set(stateName, { name: stateName, files: [] });
+    }
+    states.get(stateName).files.push(file);
+  }
+
+  if (!scenarioName) {
+    scenarioName = inferScenarioName(files);
+  }
+
+  return {
+    name: scenarioName || "Scenario",
+    states,
+  };
+}
+
+async function buildSnapshotFromState({ scenarioName, stateName, files }) {
+  const instrumentsById = new Map();
+  const publications = [];
+  const sourceFiles = [];
+
+  const sortedFiles = [...files].sort((a, b) =>
+    (a.webkitRelativePath || a.name).localeCompare(
+      b.webkitRelativePath || b.name,
+      undefined,
+      { numeric: true, sensitivity: "base" },
+    ),
+  );
+
+  for (const file of sortedFiles) {
+    const xmlText = await file.text();
+    const parsed = parseTimelineXml(xmlText, file);
+
+    sourceFiles.push(parsed.meta.sourceFile);
+    publications.push({
+      publicationId: parsed.meta.publicationId,
+      publicationDate: parsed.meta.publicationDate,
+      instrumentId: parsed.meta.instrumentId,
+      instrumentType: parsed.meta.instrumentType,
+    });
+
+    parsed.instruments.forEach((instrument) => {
+      const existing = instrumentsById.get(instrument.instrumentId);
+
+      if (!existing) {
+        instrumentsById.set(instrument.instrumentId, {
+          ...instrument,
+          versions: [...instrument.versions],
+        });
+        return;
+      }
+
+      existing.versions = mergeVersions(existing.versions, instrument.versions);
+      existing.instrumentType = prioritizeInstrumentType(
+        existing.instrumentType,
+        instrument.instrumentType,
+      );
+      existing.displayName = buildInstrumentLabel(
+        existing.instrumentId,
+        existing.instrumentType,
+      );
+    });
+  }
+
+  const instruments = Array.from(instrumentsById.values()).sort(compareInstruments);
+
+  return {
+    meta: {
+      scenarioName,
+      stateName,
+      sourceFiles,
+      publications,
+    },
+    instruments,
+  };
+}
+
+function mergeVersions(existing, incoming) {
+  const byKey = new Map();
+  existing.forEach((version) => byKey.set(version.key, version));
+  incoming.forEach((version) => byKey.set(version.key, version));
+  return Array.from(byKey.values()).sort(compareVersions);
+}
+
+function prioritizeInstrumentType(currentType, newType) {
+  if (!newType) {
+    return currentType;
+  }
+  if (!currentType) {
+    return newType;
+  }
+  return instrumentTypeWeight(newType) < instrumentTypeWeight(currentType)
+    ? newType
+    : currentType;
+}
+
+function compareInstruments(a, b) {
+  const weightDiff =
+    instrumentTypeWeight(a.instrumentType) - instrumentTypeWeight(b.instrumentType);
+  if (weightDiff !== 0) {
+    return weightDiff;
+  }
+  return a.displayName.localeCompare(b.displayName, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+}
+
+function compareVersions(a, b) {
+  const aTime = a.validFrom ? a.validFrom.getTime() : Number.NEGATIVE_INFINITY;
+  const bTime = b.validFrom ? b.validFrom.getTime() : Number.NEGATIVE_INFINITY;
+  if (aTime !== bTime) {
+    return aTime - bTime;
+  }
+  return (a.versionNumber || 0) - (b.versionNumber || 0);
+}
+
+function instrumentTypeWeight(type) {
+  if (type === "regeling") {
+    return 0;
+  }
+  if (type === "informatie-object") {
+    return 1;
+  }
+  return 2;
+}
+
+function inferScenarioName(files) {
+  const first = files[0];
+  if (!first) {
+    return "";
+  }
+  const segments = splitPathSegments(first.webkitRelativePath || first.name);
+  return segments[0] || "";
+}
+
+function splitPathSegments(path) {
+  return path.split(/[/\\]+/).filter(Boolean);
 }
 
 function renderSnapshot(snapshot) {
@@ -243,8 +697,15 @@ function renderSnapshot(snapshot) {
     latestStartCandidate instanceof Date && !Number.isNaN(latestStartCandidate.getTime())
       ? latestStartCandidate
       : earliestDate;
-  const fallbackEnd = d3.timeMonth.offset(latestStart, 6);
-  const domainEnd = latestExplicitEnd ?? fallbackEnd;
+
+  // Calculate the actual data range end (latest of explicit ends or starts)
+  const dataEnd = latestExplicitEnd || latestStart;
+
+  // Always show 10% more time from first to last date in data
+  const dataRange = dataEnd.getTime() - earliestDate.getTime();
+  const extendedEnd = new Date(dataEnd.getTime() + dataRange * 0.1);
+
+  const domainEnd = extendedEnd;
 
   const yScale = d3
     .scaleTime()
@@ -321,6 +782,7 @@ function renderSnapshot(snapshot) {
               ? "instrument__rect--regulation"
               : "instrument__rect--attachment",
             version.onTimeline ? null : "instrument__rect--off-timeline",
+            !version.validTo ? "instrument__rect--open-ended" : null,
           ]
             .filter(Boolean)
             .join(" "),
@@ -360,6 +822,7 @@ function renderSnapshot(snapshot) {
               ? "instrument__rect--regulation"
               : "instrument__rect--attachment",
             version.onTimeline ? null : "instrument__rect--off-timeline",
+            !version.validTo ? "instrument__rect--open-ended" : null,
           ]
             .filter(Boolean)
             .join(" "),
@@ -376,6 +839,64 @@ function renderSnapshot(snapshot) {
         );
 
       rects.exit().remove();
+
+      // Add arrow indicators for open-ended regulations
+      const arrows = container
+        .selectAll(".instrument__arrow")
+        .data(instrument.versions.filter(v => !v.validTo), (d) => `${d.key}-arrow`);
+
+      const arrowsEnter = arrows
+        .enter()
+        .append("line")
+        .attr("class", "instrument__arrow")
+        .attr("x1", 0)
+        .attr("x2", 0)
+        .attr("y1", (d) => {
+          const rectY = yScale(d.validFrom) || margin.top;
+          const rectHeight = Math.max(
+            4,
+            (yScale(d.validTo ?? domainEnd) || margin.top) - rectY,
+          );
+          return rectY + rectHeight;
+        })
+        .attr("y2", (d) => {
+          const rectY = yScale(d.validFrom) || margin.top;
+          const rectHeight = Math.max(
+            4,
+            (yScale(d.validTo ?? domainEnd) || margin.top) - rectY,
+          );
+          return rectY + rectHeight + 20;
+        })
+        .attr("stroke", "#5c6bf0")
+        .attr("stroke-width", 3)
+        .attr("marker-end", "url(#arrowhead)")
+        .style("opacity", 0);
+
+      arrows
+        .merge(arrowsEnter)
+        .transition()
+        .duration(TRANSITION_DURATION_MS)
+        .attr("x1", 0)
+        .attr("x2", 0)
+        .attr("y1", (d) => {
+          const rectY = yScale(d.validFrom) || margin.top;
+          const rectHeight = Math.max(
+            4,
+            (yScale(d.validTo ?? domainEnd) || margin.top) - rectY,
+          );
+          return rectY + rectHeight;
+        })
+        .attr("y2", (d) => {
+          const rectY = yScale(d.validFrom) || margin.top;
+          const rectHeight = Math.max(
+            4,
+            (yScale(d.validTo ?? domainEnd) || margin.top) - rectY,
+          );
+          return rectY + rectHeight + 20;
+        })
+        .style("opacity", 1);
+
+      arrows.exit().remove();
 
       const labels = container
         .selectAll(".instrument__version-label")
@@ -434,7 +955,7 @@ function togglePlayback() {
 }
 
 function startPlayback() {
-  if (isPlaying || !snapshots.length) {
+  if (isPlaying || snapshots.length <= 1) {
     return;
   }
   isPlaying = true;
@@ -461,16 +982,39 @@ function clearVisualization() {
 }
 
 function updateSnapshotHeading(snapshot) {
-  timelineTitle.textContent = `Timeline snapshot ${activeIndex + 1} of ${snapshots.length}`;
+  const scenarioName = snapshot.meta.scenarioName || activeScenarioName || "Scenario";
+  const stateName = snapshot.meta.stateName || `State ${activeIndex + 1}`;
+  timelineTitle.textContent = `${scenarioName} • ${stateName} (${activeIndex + 1}/${snapshots.length})`;
+
+  const instrumentCount = snapshot.instruments.length;
+  const regulationCount = snapshot.instruments.filter(
+    (instrument) => instrument.instrumentType === "regeling",
+  ).length;
+
+  const publicationDates = snapshot.meta.publications
+    .map((item) => item.publicationDate)
+    .filter((date) => date instanceof Date && !Number.isNaN(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+
   const formatter = d3.timeFormat("%Y-%m-%d");
-  const lines = [];
-  if (snapshot.meta.publicationId) {
-    lines.push(`Publication: ${snapshot.meta.publicationId}`);
+  const lines = [
+    `${instrumentCount} instrument${instrumentCount === 1 ? "" : "s"}`,
+  ];
+
+  if (regulationCount) {
+    lines.push(`${regulationCount} regulation${regulationCount === 1 ? "" : "s"}`);
   }
-  if (snapshot.meta.publicationDate instanceof Date) {
-    lines.push(`Bekendmaking: ${formatter(snapshot.meta.publicationDate)}`);
+
+  if (publicationDates.length === 1) {
+    lines.push(`Bekendmaking: ${formatter(publicationDates[0])}`);
+  } else if (publicationDates.length > 1) {
+    lines.push(
+      `Bekendmaking: ${formatter(publicationDates[0])} → ${formatter(publicationDates.slice(-1)[0])}`,
+    );
   }
-  lines.push(`Source: ${snapshot.meta.sourceFile}`);
+
+  lines.push(`Files: ${snapshot.meta.sourceFiles.length}`);
+
   timelineMeta.textContent = lines.join(" • ");
 }
 

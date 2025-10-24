@@ -55,6 +55,32 @@ body {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.controls__scenario {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 220px;
+  font-weight: 600;
+}
+
+.controls__scenario select {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(91, 103, 138, 0.35);
+  background: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #20242c;
+  box-shadow: 0 2px 8px rgba(33, 35, 58, 0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.controls__scenario select:focus {
+  outline: none;
+  border-color: #5c6bf0;
+  box-shadow: 0 8px 20px rgba(92, 107, 240, 0.2);
+}
+
 .controls__picker:hover span {
   border-color: #5c6bf0;
   box-shadow: 0 6px 16px rgba(92, 107, 240, 0.15);
@@ -150,6 +176,12 @@ body {
   fill: #cbd5ff;
   stroke-dasharray: 3 2;
   opacity: 0.5;
+}
+
+.instrument__rect--open-ended {
+  fill: url(#openEndedGradient);
+  stroke: #5c6bf0;
+  stroke-width: 2;
 }
 
 .instrument__version-label {
