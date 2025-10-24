@@ -41,23 +41,23 @@ const gradient = defs.append("linearGradient")
   .attr("id", "openEndedGradient")
   .attr("x1", "0%")
   .attr("y1", "0%")
-  .attr("x2", "100%")
-  .attr("y2", "0%");
+  .attr("x2", "0%")
+  .attr("y2", "100%");
 
 gradient.append("stop")
   .attr("offset", "0%")
   .attr("stop-color", "#5c6bf0")
-  .attr("stop-opacity", 0.9);
+  .attr("stop-opacity", 1.0);
 
 gradient.append("stop")
-  .attr("offset", "70%")
+  .attr("offset", "80%")
   .attr("stop-color", "#5c6bf0")
-  .attr("stop-opacity", 0.9);
+  .attr("stop-opacity", 0.7);
 
 gradient.append("stop")
   .attr("offset", "100%")
-  .attr("stop-color", "#7c8cf0")
-  .attr("stop-opacity", 0.6);
+  .attr("stop-color", "#5c6bf0")
+  .attr("stop-opacity", 0.0);
 
 // Arrow marker for open-ended regulations (pointing down)
 defs.append("marker")

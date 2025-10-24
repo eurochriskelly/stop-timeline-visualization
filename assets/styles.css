@@ -174,14 +174,13 @@ body {
 
 .instrument__rect--off-timeline {
   fill: #cbd5ff;
-  stroke-dasharray: 3 2;
   opacity: 0.5;
 }
 
 .instrument__rect--open-ended {
   fill: url(#openEndedGradient);
-  stroke: #5c6bf0;
-  stroke-width: 2;
+  /* Debug: temporary solid color to verify class is applied */
+  /* fill: red; */
 }
 
 .instrument__version-label {

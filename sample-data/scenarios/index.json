@@ -1,0 +1,47 @@
+{
+  "basePath": "sample-data/scenarios",
+  "scenarios": [
+    {
+      "id": "scen-1",
+      "label": "Scenario 1",
+      "states": [
+        {
+          "id": "state-1",
+          "label": "State 1",
+          "files": [
+            "state-1/r1/io1.xml",
+            "state-1/r1/io2.xml",
+            "state-1/r1/regeling.xml",
+            "state-1/r2/io1.xml",
+            "state-1/r2/io2.xml",
+            "state-1/r2/regeling.xml"
+          ]
+        },
+        {
+          "id": "state-2",
+          "label": "State 2",
+          "files": [
+            "state-2/r1/io1.xml",
+            "state-2/r1/io2.xml",
+            "state-2/r1/regeling.xml",
+            "state-2/r2/io1.xml",
+            "state-2/r2/io2.xml",
+            "state-2/r2/regeling.xml"
+          ]
+        },
+        {
+          "id": "state-3",
+          "label": "State 3",
+          "files": [
+            "state-3/r1/io-1.xml",
+            "state-3/r1/io-2.xml",
+            "state-3/r1/regeling.xml",
+            "state-3/r2/io-1.xml",
+            "state-3/r2/io-2.xml",
+            "state-3/r2/regeling.xml"
+          ]
+        }
+      ]
+    }
+  ]
+}
