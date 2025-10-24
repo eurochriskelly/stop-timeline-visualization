@@ -701,11 +701,13 @@ function renderSnapshot(snapshot) {
   // Calculate the actual data range end (latest of explicit ends or starts)
   const dataEnd = latestExplicitEnd || latestStart;
 
-  // Always show 10% more time from first to last date in data
-  const dataRange = dataEnd.getTime() - earliestDate.getTime();
-  const extendedEnd = new Date(dataEnd.getTime() + dataRange * 0.1);
+   // Always show the next 2 months or 10% - whichever is larger
+   const dataRange = dataEnd.getTime() - earliestDate.getTime();
+   const tenPercentExtension = new Date(dataEnd.getTime() + dataRange * 0.1);
+   const twoMonthsLater = new Date(dataEnd);
+   twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
 
-  const domainEnd = extendedEnd;
+   const domainEnd = new Date(Math.max(tenPercentExtension.getTime(), twoMonthsLater.getTime()));
 
   const yScale = d3
     .scaleTime()
@@ -713,12 +715,31 @@ function renderSnapshot(snapshot) {
     .range([margin.top, height - margin.bottom])
     .nice();
 
-  const axis = d3.axisLeft(yScale).ticks(10).tickFormat(d3.timeFormat("%Y-%m-%d"));
+   const axis = d3.axisLeft(yScale).ticks(10).tickFormat(d3.timeFormat("%Y-%m-%d"));
 
-  axisGroup
-    .transition()
-    .duration(TRANSITION_DURATION_MS)
-    .call(axis);
+   axisGroup
+     .transition()
+     .duration(TRANSITION_DURATION_MS)
+     .call(axis);
+
+   // Add reference lines for current date and last known date
+   const currentDate = new Date();
+   const lastKnownDate = dataEnd;
+
+   const referenceLines = svg.selectAll(".reference-line").data([currentDate, lastKnownDate]);
+
+   referenceLines.enter().append("line").attr("class", "reference-line");
+
+   referenceLines
+     .attr("x1", margin.left)
+     .attr("x2", width - margin.right)
+     .attr("y1", (d) => yScale(d))
+     .attr("y2", (d) => yScale(d))
+     .attr("stroke", (d, i) => (i === 0 ? "#ff6b6b" : "#4ecdc4")) // red for current, teal for last known
+     .attr("stroke-width", 2)
+     .attr("stroke-dasharray", "5,5");
+
+   referenceLines.exit().remove();
 
   const xScale = d3
     .scaleBand()
