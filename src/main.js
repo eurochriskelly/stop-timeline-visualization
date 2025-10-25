@@ -35,6 +35,8 @@ const axisGroup = svg
   .attr("class", "axis axis--y")
   .attr("transform", `translate(${margin.left},0)`);
 
+const backgroundsGroup = svg.append("g").attr("class", "backgrounds");
+
 const instrumentsGroup = svg.append("g").attr("class", "instruments");
 
 // Add gradient and marker definitions for open-ended regulations
@@ -606,7 +608,7 @@ function parseTimelineXml(xmlText, file) {
       return {
         instrumentId,
         instrumentType,
-        displayName: buildInstrumentLabel(instrumentId, instrumentType),
+        folder: instrumentId.split("/")[0] || instrumentId,
         versions: filteredVersions.sort(compareVersions),
       };
     })
@@ -663,39 +665,47 @@ async function buildSnapshotFromState({ scenarioName, stateName, files }) {
     ),
   );
 
-  for (const file of sortedFiles) {
-    const xmlText = await file.text();
-    const parsed = parseTimelineXml(xmlText, file);
+   for (const file of sortedFiles) {
+     const xmlText = await file.text();
+     const parsed = parseTimelineXml(xmlText, file);
 
-    sourceFiles.push(parsed.meta.sourceFile);
-    publications.push({
-      publicationId: parsed.meta.publicationId,
-      publicationDate: parsed.meta.publicationDate,
-      instrumentId: parsed.meta.instrumentId,
-      instrumentType: parsed.meta.instrumentType,
-    });
+     const segments = (file.webkitRelativePath || file.name).split(/[/\\]+/);
+     const folder = segments[segments.length - 2] || "unknown";
 
-    parsed.instruments.forEach((instrument) => {
-      const existing = instrumentsById.get(instrument.instrumentId);
+     sourceFiles.push(parsed.meta.sourceFile);
+     publications.push({
+       publicationId: parsed.meta.publicationId,
+       publicationDate: parsed.meta.publicationDate,
+       instrumentId: parsed.meta.instrumentId,
+       instrumentType: parsed.meta.instrumentType,
+     });
 
-      if (!existing) {
-        instrumentsById.set(instrument.instrumentId, {
-          ...instrument,
-          versions: [...instrument.versions],
-        });
-        return;
-      }
+     parsed.instruments.forEach((instrument) => {
+       instrument.folder = folder;
+       instrument.displayName = buildInstrumentLabel(instrument.instrumentId, instrument.instrumentType, instrument.folder);
 
-      existing.versions = mergeVersions(existing.versions, instrument.versions);
-      existing.instrumentType = prioritizeInstrumentType(
-        existing.instrumentType,
-        instrument.instrumentType,
-      );
-      existing.displayName = buildInstrumentLabel(
-        existing.instrumentId,
-        existing.instrumentType,
-      );
-    });
+       const existing = instrumentsById.get(instrument.instrumentId);
+
+       if (!existing) {
+         instrumentsById.set(instrument.instrumentId, {
+           ...instrument,
+           versions: [...instrument.versions],
+         });
+         return;
+       }
+
+       existing.versions = mergeVersions(existing.versions, instrument.versions);
+       existing.instrumentType = prioritizeInstrumentType(
+         existing.instrumentType,
+         instrument.instrumentType,
+       );
+       existing.folder = folder; // ensure folder is set
+       existing.displayName = buildInstrumentLabel(
+         existing.instrumentId,
+         existing.instrumentType,
+         existing.folder,
+       );
+     });
   }
 
   const instruments = Array.from(instrumentsById.values()).sort(compareInstruments);
@@ -731,6 +741,13 @@ function prioritizeInstrumentType(currentType, newType) {
 }
 
 function compareInstruments(a, b) {
+  const folderDiff = (a.folder || "").localeCompare(b.folder || "", undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  if (folderDiff !== 0) {
+    return folderDiff;
+  }
   const weightDiff =
     instrumentTypeWeight(a.instrumentType) - instrumentTypeWeight(b.instrumentType);
   if (weightDiff !== 0) {
@@ -851,6 +868,22 @@ function renderSnapshot(snapshot) {
     .range([margin.left, width - margin.right])
     .paddingInner(0.4)
     .paddingOuter(0.2);
+
+  const instrumentsByFolder = d3.group(snapshot.instruments, d => d.folder);
+  const backgroundSelection = backgroundsGroup.selectAll(".background").data(Array.from(instrumentsByFolder.entries()), ([folder]) => folder);
+  backgroundSelection.enter().append("rect").attr("class", "background");
+  backgroundSelection
+    .attr("x", ([folder, instruments]) => xScale(instruments[0].instrumentId) - xScale.bandwidth() * 0.2)
+    .attr("y", margin.top)
+    .attr("width", ([folder, instruments]) => {
+      const firstX = xScale(instruments[0].instrumentId);
+      const lastX = xScale(instruments[instruments.length - 1].instrumentId);
+      return lastX + xScale.bandwidth() - firstX + xScale.bandwidth() * 0.4;
+    })
+    .attr("height", height - margin.top - margin.bottom)
+    .attr("fill", "rgba(0,0,0,0.05)")
+    .attr("pointer-events", "none");
+  backgroundSelection.exit().remove();
 
   const columnWidth = Math.min(180, Math.max(60, xScale.bandwidth() * 0.7));
 
@@ -1200,7 +1233,7 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function buildInstrumentLabel(instrumentId, instrumentType) {
+function buildInstrumentLabel(instrumentId, instrumentType, folder) {
   const tail = instrumentId ? instrumentId.split("/").slice(-1)[0] : "onbekend";
   const labelType =
     instrumentType === "regeling"
@@ -1210,7 +1243,7 @@ function buildInstrumentLabel(instrumentId, instrumentType) {
         : instrumentType
         ? capitalize(instrumentType)
         : "Instrument";
-  return `${labelType} • ${tail}`;
+  return `${labelType} • ${folder} • ${tail}`;
 }
 
 function capitalize(value) {
