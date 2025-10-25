@@ -1,5 +1,5 @@
 {
-  "basePath": "sample-data/scenarios",
+  "basePath": "./sample-data/scenarios",
   "scenarios": [
     {
       "id": "scen-1",

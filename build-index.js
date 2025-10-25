@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const scenariosDir = 'sample-data/scenarios';
+const scenariosDir = './sample-data/scenarios';
 
 function getScenarios() {
   const scenarios = [];

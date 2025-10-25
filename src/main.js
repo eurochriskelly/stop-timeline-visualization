@@ -59,20 +59,24 @@ gradient.append("stop")
   .attr("stop-color", "#5c6bf0")
   .attr("stop-opacity", 0.0);
 
-// Arrow marker for open-ended regulations (pointing down)
-defs.append("marker")
-  .attr("id", "arrowhead")
-  .attr("viewBox", "0 0 10 10")
-  .attr("refX", "5")
-  .attr("refY", "9")
-  .attr("markerWidth", "8")
-  .attr("markerHeight", "8")
-  .attr("orient", "0deg")
-  .append("path")
-  .attr("d", "M 0 0 L 5 10 L 10 0 z")
-  .attr("fill", "#5c6bf0");
+   // Arrow marker for open-ended regulations (pointing down)
+   defs.append("marker")
+     .attr("id", "arrowhead")
+     .viewBox("0 0 10 10")
+     .refX("5")
+     .refY("9")
+     .markerWidth("8")
+     .markerHeight("8")
+     .orient("0deg")
+     .append("path")
+     .attr("d", "M 0 0 L 5 10 L 10 0 z")
+     .attr("fill", "#5c6bf0");
 
-let snapshots = [];
+   // Background for past dates
+   const pastBackground = svg.selectAll(".past-background").data([null]);
+   pastBackground.enter().append("rect").attr("class", "past-background");
+
+   let snapshots = [];
 let activeIndex = 0;
 let animationHandle = null;
 let isPlaying = false;
@@ -243,7 +247,7 @@ async function initializeScenarioManifest() {
   }
 
   try {
-    const response = await fetch("sample-data/scenarios/index.json", {
+    const response = await fetch("./sample-data/scenarios/index.json", {
       cache: "no-store",
     });
 
@@ -722,11 +726,18 @@ function renderSnapshot(snapshot) {
      .duration(TRANSITION_DURATION_MS)
      .call(axis);
 
-   // Add reference lines for current date and last known date
+   // Add background for past dates and line for current date
    const currentDate = new Date();
-   const lastKnownDate = dataEnd;
 
-   const referenceLines = svg.selectAll(".reference-line").data([currentDate, lastKnownDate]);
+   pastBackground
+     .attr("x", 0)
+     .attr("y", yScale(earliestDate))
+     .attr("width", width)
+     .attr("height", Math.max(0, yScale(Math.min(currentDate, domainEnd)) - yScale(earliestDate)))
+     .attr("fill", "rgba(0,0,0,0.05)")
+     .attr("pointer-events", "none");
+
+   const referenceLines = svg.selectAll(".reference-line").data([currentDate]);
 
    referenceLines.enter().append("line").attr("class", "reference-line");
 
@@ -735,9 +746,8 @@ function renderSnapshot(snapshot) {
      .attr("x2", width - margin.right)
      .attr("y1", (d) => yScale(d))
      .attr("y2", (d) => yScale(d))
-     .attr("stroke", (d, i) => (i === 0 ? "#ff6b6b" : "#4ecdc4")) // red for current, teal for last known
-     .attr("stroke-width", 2)
-     .attr("stroke-dasharray", "5,5");
+     .attr("stroke", "#ff6b6b")
+     .attr("stroke-width", 2);
 
    referenceLines.exit().remove();
 
