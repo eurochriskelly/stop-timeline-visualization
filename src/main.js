@@ -1,4 +1,5 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+import embeddedScenarioManifest from "../sample-data/scenarios/index.js";
 
 const NAMESPACE = "http://koop.overheid.nl/apps/opera/";
 const DATE_FAR_FUTURE = "9999-12-31";
@@ -37,46 +38,49 @@ const instrumentsGroup = svg.append("g").attr("class", "instruments");
 // Add gradient and marker definitions for open-ended regulations
 const defs = svg.append("defs");
 
-const gradient = defs.append("linearGradient")
+const gradient = defs
+  .append("linearGradient")
   .attr("id", "openEndedGradient")
   .attr("x1", "0%")
   .attr("y1", "0%")
   .attr("x2", "0%")
   .attr("y2", "100%");
 
-gradient.append("stop")
+gradient
+  .append("stop")
   .attr("offset", "0%")
   .attr("stop-color", "#5c6bf0")
   .attr("stop-opacity", 1.0);
 
-gradient.append("stop")
+gradient
+  .append("stop")
   .attr("offset", "80%")
   .attr("stop-color", "#5c6bf0")
   .attr("stop-opacity", 0.7);
 
-gradient.append("stop")
+gradient
+  .append("stop")
   .attr("offset", "100%")
   .attr("stop-color", "#5c6bf0")
   .attr("stop-opacity", 0.0);
 
-   // Arrow marker for open-ended regulations (pointing down)
-   defs.append("marker")
-     .attr("id", "arrowhead")
-     .viewBox("0 0 10 10")
-     .refX("5")
-     .refY("9")
-     .markerWidth("8")
-     .markerHeight("8")
-     .orient("0deg")
-     .append("path")
-     .attr("d", "M 0 0 L 5 10 L 10 0 z")
-     .attr("fill", "#5c6bf0");
+defs
+  .append("marker")
+  .attr("id", "arrowhead")
+  .attr("viewBox", "0 0 10 10")
+  .attr("refX", "5")
+  .attr("refY", "9")
+  .attr("markerWidth", "8")
+  .attr("markerHeight", "8")
+  .attr("orient", "0deg")
+  .append("path")
+  .attr("d", "M 0 0 L 5 10 L 10 0 z")
+  .attr("fill", "#5c6bf0");
 
-   // Background for past dates
-   const pastBackground = svg.selectAll(".past-background").data([null]);
-   pastBackground.enter().append("rect").attr("class", "past-background");
+const pastBackground = svg.selectAll(".past-background").data([null]);
+pastBackground.enter().append("rect").attr("class", "past-background");
 
-   let snapshots = [];
+let snapshots = [];
 let activeIndex = 0;
 let animationHandle = null;
 let isPlaying = false;
@@ -205,9 +209,9 @@ async function handleScenarioSelect(event) {
       folderInput.value = "";
     }
 
-    const scenarioBasePath = `${scenarioManifest.basePath}/${scenarioEntry.id}`.replace(
-      /\/{2,}/g,
-      "/",
+    const scenarioBaseUrl = new URL(
+      `../${sanitizeBasePath(scenarioManifest.basePath)}/${scenarioEntry.id}/`,
+      import.meta.url,
     );
 
     const stateGroups = [];
@@ -215,7 +219,7 @@ async function handleScenarioSelect(event) {
       const files = await Promise.all(
         (state.files || []).map((filePath) =>
           fetchScenarioFile({
-            scenarioBasePath,
+            scenarioBaseUrl,
             scenarioId: scenarioEntry.id,
             filePath,
           }),
@@ -246,8 +250,16 @@ async function initializeScenarioManifest() {
     return;
   }
 
+  const applyManifest = (rawManifest) => {
+    const normalized = normalizeScenarioManifest(rawManifest);
+    scenarioManifest = normalized;
+    populateScenarioSelect();
+  };
+
+  const manifestUrl = new URL("../sample-data/scenarios/index.json", import.meta.url);
+
   try {
-    const response = await fetch("./sample-data/scenarios/index.json", {
+    const response = await fetch(manifestUrl, {
       cache: "no-store",
     });
 
@@ -256,10 +268,14 @@ async function initializeScenarioManifest() {
     }
 
     const rawManifest = await response.json();
-    scenarioManifest = normalizeScenarioManifest(rawManifest);
-    populateScenarioSelect();
+    applyManifest(rawManifest);
   } catch (error) {
-    console.warn("Scenario manifest could not be loaded.", error);
+    console.warn("Scenario manifest could not be loaded via fetch, falling back to embedded copy.", error);
+    if (embeddedScenarioManifest) {
+      applyManifest(embeddedScenarioManifest);
+      return;
+    }
+
     scenarioManifest = null;
     if (scenarioSelect) {
       scenarioSelect.disabled = true;
@@ -274,10 +290,7 @@ async function initializeScenarioManifest() {
 }
 
 function normalizeScenarioManifest(rawManifest) {
-  const basePath =
-    typeof rawManifest?.basePath === "string" && rawManifest.basePath.trim()
-      ? rawManifest.basePath.trim().replace(/\/+$/, "")
-      : "sample-data/scenarios";
+  const basePath = sanitizeBasePath(rawManifest?.basePath);
 
   const scenarios = Array.isArray(rawManifest?.scenarios)
     ? rawManifest.scenarios
@@ -295,9 +308,13 @@ function normalizeScenarioManifest(rawManifest) {
                     return null;
                   }
                   const files = Array.isArray(state?.files)
-                    ? state.files
-                        .map((filePath) => String(filePath || "").trim())
-                        .filter(Boolean)
+                    ? Array.from(
+                        new Set(
+                          state.files
+                            .map((filePath) => sanitizeRelativePath(filePath))
+                            .filter(Boolean),
+                        ),
+                      )
                     : [];
                   if (!files.length) {
                     return null;
@@ -412,11 +429,10 @@ async function loadScenarioFromStateGroups({ scenarioName, stateGroups }) {
   }
 }
 
-async function fetchScenarioFile({ scenarioBasePath, scenarioId, filePath }) {
-  const cleanedScenarioBase = scenarioBasePath.replace(/\/+$/, "");
-  const normalizedPath = String(filePath || "").replace(/^\/+/, "");
-  const url = `${cleanedScenarioBase}/${normalizedPath}`;
-  const response = await fetch(url, { cache: "no-store" });
+async function fetchScenarioFile({ scenarioBaseUrl, scenarioId, filePath }) {
+  const normalizedPath = sanitizeRelativePath(filePath);
+  const fileUrl = new URL(normalizedPath, scenarioBaseUrl);
+  const response = await fetch(fileUrl, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Unable to fetch ${normalizedPath} (HTTP ${response.status})`);
   }
@@ -433,6 +449,33 @@ async function fetchScenarioFile({ scenarioBasePath, scenarioId, filePath }) {
       return content;
     },
   };
+}
+
+function sanitizeBasePath(value) {
+  if (typeof value !== "string") {
+    return "sample-data/scenarios";
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "sample-data/scenarios";
+  }
+  if (/^https?:\/\//i.test(trimmed)) {
+    return trimmed.replace(/\/+$/, "");
+  }
+  const normalized = trimmed
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+  return normalized || "sample-data/scenarios";
+}
+
+function sanitizeRelativePath(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\\/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/^\/+/, "");
 }
 
 function parseTimelineXml(xmlText, file) {

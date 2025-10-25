@@ -1,19 +1,19 @@
 <?xml version="1.0"?>
 <consolidatie-tijdlijn xmlns="http://koop.overheid.nl/apps/opera/">
   <metadata>
-    <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659692_1</publicatie-id>
+    <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659691_1</publicatie-id>
     <datum-bekendmaking>2025-10-27</datum-bekendmaking>
-    <instrument-id>/join/id/regdata/gm0518/2025/IO_2025102418_5659692_1-gio-1</instrument-id>
+    <instrument-id>/join/id/regdata/gm0518/2025/IO_2025102418_5659691_1-gio-1</instrument-id>
     <instrument-type>informatieobject</instrument-type>
-    <id-levering>2025102418_5659692_1</id-levering>
+    <id-levering>2025102418_5659691_1</id-levering>
     <aanlevering-tijd>2025-10-24T18:57:03.72566+02:00</aanlevering-tijd>
   </metadata>
-  <instrument-toestanden instrument-id="/join/id/regdata/gm0518/2025/IO_2025102418_5659692_1-gio-1" oin="00000001003214345000">
-    <toestand aanlevering-tijd="2025-10-24T18:57:03.72566+02:00" id-levering="2025102418_5659692_1" creeer-operatie="initieel-besluit">
+  <instrument-toestanden instrument-id="/join/id/regdata/gm0518/2025/IO_2025102418_5659691_1-gio-1" oin="00000001003214345000">
+    <toestand aanlevering-tijd="2025-10-24T18:57:03.72566+02:00" id-levering="2025102418_5659691_1" creeer-operatie="initieel-besluit">
       <instrument-type>informatieobject</instrument-type>
-      <instrument-versie-id>/join/id/regdata/gm0518/2025/IO_2025102418_5659692_1-gio-1/nld@1</instrument-versie-id>
+      <instrument-versie-id>/join/id/regdata/gm0518/2025/IO_2025102418_5659691_1-gio-1/nld@1</instrument-versie-id>
       <versie-nummer>1</versie-nummer>
-      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659692_1</publicatie-id>
+      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659691_1</publicatie-id>
       <publicatie-date>2025-10-27</publicatie-date>
       <juridisch-werkend-vanaf>2025-11-03</juridisch-werkend-vanaf>
       <juridisch-werkend-tot>9999-12-31</juridisch-werkend-tot>
@@ -22,7 +22,7 @@
       </verwerking>
       <op-tijdlijn>true</op-tijdlijn>
       <doelen>
-        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659692_1"/>
+        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659691_1"/>
       </doelen>
     </toestand>
   </instrument-toestanden>

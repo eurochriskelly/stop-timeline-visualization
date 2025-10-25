@@ -1,18 +1,18 @@
 <consolidatie-tijdlijn xmlns="http://koop.overheid.nl/apps/opera/">
   <metadata>
-    <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659692_3</publicatie-id>
+    <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659691_3</publicatie-id>
     <datum-bekendmaking>2025-10-29</datum-bekendmaking>
-    <instrument-id>/akn/nl/act/gm0518/2025/R_2025102418_5659692</instrument-id>
+    <instrument-id>/akn/nl/act/gm0518/2025/R_2025102418_5659691</instrument-id>
     <instrument-type>regeling</instrument-type>
-    <id-levering>2025102418_5659692_3</id-levering>
+    <id-levering>2025102418_5659691_3</id-levering>
     <aanlevering-tijd>2025-10-24T18:57:07.318086+02:00</aanlevering-tijd>
   </metadata>
-  <instrument-toestanden instrument-id="/akn/nl/act/gm0518/2025/R_2025102418_5659692" oin="00000001003214345000">
-    <toestand aanlevering-tijd="2025-10-24T18:57:03.72566+02:00" id-levering="2025102418_5659692_2" creeer-operatie="initieel-besluit">
+  <instrument-toestanden instrument-id="/akn/nl/act/gm0518/2025/R_2025102418_5659691" oin="00000001003214345000">
+    <toestand aanlevering-tijd="2025-10-24T18:57:03.72566+02:00" id-levering="2025102418_5659691_2" creeer-operatie="initieel-besluit">
       <instrument-type>regeling</instrument-type>
-      <instrument-versie-id>/akn/nl/act/gm0518/2025/R_2025102418_5659692/nld@1</instrument-versie-id>
+      <instrument-versie-id>/akn/nl/act/gm0518/2025/R_2025102418_5659691/nld@1</instrument-versie-id>
       <versie-nummer>1</versie-nummer>
-      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659692_1</publicatie-id>
+      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659691_1</publicatie-id>
       <publicatie-date>2025-10-27</publicatie-date>
       <juridisch-werkend-vanaf>2025-11-03</juridisch-werkend-vanaf>
       <juridisch-werkend-tot>2025-12-23</juridisch-werkend-tot>
@@ -21,14 +21,14 @@
       </verwerking>
       <op-tijdlijn>true</op-tijdlijn>
       <doelen>
-        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659692_1"/>
+        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659691_1"/>
       </doelen>
     </toestand>
-    <toestand aanlevering-tijd="2025-10-24T18:57:05.91115+02:00" id-levering="2025102418_5659692_3" creeer-operatie="mutatie-besluit">
+    <toestand aanlevering-tijd="2025-10-24T18:57:05.91115+02:00" id-levering="2025102418_5659691_3" creeer-operatie="mutatie-besluit">
       <instrument-type>regeling</instrument-type>
-      <instrument-versie-id>/akn/nl/act/gm0518/2025/R_2025102418_5659692/nld@2</instrument-versie-id>
+      <instrument-versie-id>/akn/nl/act/gm0518/2025/R_2025102418_5659691/nld@2</instrument-versie-id>
       <versie-nummer>2</versie-nummer>
-      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659692_2</publicatie-id>
+      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659691_2</publicatie-id>
       <publicatie-date>2025-10-28</publicatie-date>
       <juridisch-werkend-vanaf>2025-12-23</juridisch-werkend-vanaf>
       <juridisch-werkend-tot>2026-01-12</juridisch-werkend-tot>
@@ -37,14 +37,14 @@
       </verwerking>
       <op-tijdlijn>true</op-tijdlijn>
       <doelen>
-        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659692_2"/>
+        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659691_2"/>
       </doelen>
     </toestand>
-    <toestand aanlevering-tijd="2025-10-24T18:57:07.318086+02:00" id-levering="2025102418_5659692_3" creeer-operatie="mutatie-besluit">
+    <toestand aanlevering-tijd="2025-10-24T18:57:07.318086+02:00" id-levering="2025102418_5659691_3" creeer-operatie="mutatie-besluit">
       <instrument-type>regeling</instrument-type>
-      <instrument-versie-id>/akn/nl/act/gm0518/2025/R_2025102418_5659692/nld@3</instrument-versie-id>
+      <instrument-versie-id>/akn/nl/act/gm0518/2025/R_2025102418_5659691/nld@3</instrument-versie-id>
       <versie-nummer>3</versie-nummer>
-      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659692_3</publicatie-id>
+      <publicatie-id>/akn/nl/bill/gm0518/2025/B_2025102418_5659691_3</publicatie-id>
       <publicatie-date>2025-10-29</publicatie-date>
       <juridisch-werkend-vanaf>2026-01-12</juridisch-werkend-vanaf>
       <juridisch-werkend-tot>9999-12-31</juridisch-werkend-tot>
@@ -53,7 +53,7 @@
       </verwerking>
       <op-tijdlijn>true</op-tijdlijn>
       <doelen>
-        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659692_3"/>
+        <doel id="/join/id/proces/gm0518/2025/D_2025102418_5659691_3"/>
       </doelen>
     </toestand>
   </instrument-toestanden>
