@@ -56,6 +56,8 @@ Example excerpt:
 }
 ```
 
+Rebuild the manifest whenever you add or rename files with `make build-index`. The script walks `sample-data/scenarios/`, normalizes paths to POSIX style, and rewrites both `index.json` (used for fetches) and `index.js` (an inline fallback so the app still works if HTTP fetches are blocked).
+
 ## What the visualization shows
 
 - Each regulation or attachment (`instrument-type`) becomes a column.
