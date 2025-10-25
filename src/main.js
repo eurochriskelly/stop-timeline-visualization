@@ -1,5 +1,7 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
-import embeddedScenarioManifest from "../sample-data/scenarios/index.js";
+import embeddedScenarioManifest, {
+  inlineFiles as embeddedInlineFiles,
+} from "../sample-data/scenarios/index.js";
 
 const NAMESPACE = "http://koop.overheid.nl/apps/opera/";
 const DATE_FAR_FUTURE = "9999-12-31";
@@ -86,6 +88,7 @@ let animationHandle = null;
 let isPlaying = false;
 let activeScenarioName = "";
 let scenarioManifest = null;
+const inlineManifestFiles = embeddedInlineFiles || {};
 
 if (scenarioSelect) {
   scenarioSelect.addEventListener("change", handleScenarioSelect);
@@ -214,19 +217,24 @@ async function handleScenarioSelect(event) {
       import.meta.url,
     );
 
+    const scenarioInlineFiles = inlineManifestFiles[scenarioEntry.id] || {};
     const stateGroups = [];
     for (const state of scenarioEntry.states) {
+      const inlineStateFiles = scenarioInlineFiles[state.id] || {};
       const files = await Promise.all(
         (state.files || []).map((filePath) =>
           fetchScenarioFile({
             scenarioBaseUrl,
             scenarioId: scenarioEntry.id,
             filePath,
+            inlineFallbackBase64:
+              inlineStateFiles[sanitizeRelativePath(filePath)] ?? null,
           }),
         ),
       );
       stateGroups.push({
         stateName: state.label || state.id,
+        stateId: state.id,
         files,
       });
     }
@@ -429,26 +437,53 @@ async function loadScenarioFromStateGroups({ scenarioName, stateGroups }) {
   }
 }
 
-async function fetchScenarioFile({ scenarioBaseUrl, scenarioId, filePath }) {
+async function fetchScenarioFile({
+  scenarioBaseUrl,
+  scenarioId,
+  filePath,
+  inlineFallbackBase64,
+}) {
   const normalizedPath = sanitizeRelativePath(filePath);
-  const fileUrl = new URL(normalizedPath, scenarioBaseUrl);
-  const response = await fetch(fileUrl, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Unable to fetch ${normalizedPath} (HTTP ${response.status})`);
-  }
-
-  const content = await response.text();
+  const relativePath = `${scenarioId}/${normalizedPath}`;
   const segments = normalizedPath.split(/[/\\]+/);
   const fileName = segments[segments.length - 1] || normalizedPath;
-  const relativePath = `${scenarioId}/${normalizedPath}`;
 
-  return {
-    name: fileName,
-    webkitRelativePath: relativePath,
-    async text() {
-      return content;
-    },
+  const useInlineFallback = (reason) => {
+    if (!inlineFallbackBase64) {
+      throw reason instanceof Error ? reason : new Error(String(reason));
+    }
+    const decoded = decodeBase64(inlineFallbackBase64);
+    return {
+      name: fileName,
+      webkitRelativePath: relativePath,
+      async text() {
+        return decoded;
+      },
+    };
   };
+
+  try {
+    if (!scenarioBaseUrl) {
+      throw new Error("Scenario base URL is not available");
+    }
+    const fileUrl = new URL(normalizedPath, scenarioBaseUrl);
+    const response = await fetch(fileUrl, { cache: "no-store" });
+    if (!response.ok) {
+      return useInlineFallback(
+        new Error(`Unable to fetch ${normalizedPath} (HTTP ${response.status})`),
+      );
+    }
+    const content = await response.text();
+    return {
+      name: fileName,
+      webkitRelativePath: relativePath,
+      async text() {
+        return content;
+      },
+    };
+  } catch (error) {
+    return useInlineFallback(error);
+  }
 }
 
 function sanitizeBasePath(value) {
@@ -476,6 +511,22 @@ function sanitizeRelativePath(value) {
     .replace(/\\/g, "/")
     .replace(/^\.\//, "")
     .replace(/^\/+/, "");
+}
+
+function decodeBase64(value) {
+  if (!value) {
+    return "";
+  }
+  if (typeof window !== "undefined" && window.atob) {
+    return window.atob(value);
+  }
+  if (typeof globalThis !== "undefined" && typeof globalThis.atob === "function") {
+    return globalThis.atob(value);
+  }
+  if (typeof globalThis !== "undefined" && globalThis.Buffer) {
+    return globalThis.Buffer.from(value, "base64").toString("utf8");
+  }
+  return "";
 }
 
 function parseTimelineXml(xmlText, file) {
