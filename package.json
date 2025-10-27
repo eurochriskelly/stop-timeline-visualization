@@ -1,0 +1,27 @@
+{
+  "name": "stop-timeline-visualization",
+  "version": "1.0.0",
+  "description": "This prototype turns the consolidation timeline XML exports (``consolidatie-tijdlijn``) into a calendar-like visualization. It is built with D3 and runs entirely in the browser: select a scenario folder and the page will animate through each state’s full regulation and attachment timelines.",
+  "main": "build-index.js",
+  "directories": {
+    "doc": "doc"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eurochriskelly/stop-timeline-visualization.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/eurochriskelly/stop-timeline-visualization/issues"
+  },
+  "homepage": "https://github.com/eurochriskelly/stop-timeline-visualization#readme",
+  "dependencies": {
+    "xml2js": "^0.6.2"
+  }
+}
