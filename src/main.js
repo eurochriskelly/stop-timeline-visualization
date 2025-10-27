@@ -10,13 +10,11 @@ const TRANSITION_DURATION_MS = 700;
 const DEFAULT_STATUS_MESSAGE = "Select a scenario to begin.";
 
 const scenarioSelect = document.getElementById("scenarioSelect");
-const folderInput = document.getElementById("folderInput");
-const prevButton = document.getElementById("prevButton");
-const playPauseButton = document.getElementById("playPauseButton");
-const nextButton = document.getElementById("nextButton");
+const stateButtonsContainer = document.getElementById("stateButtons");
 const statusMessage = document.getElementById("statusMessage");
 const timelineTitle = document.getElementById("timelineTitle");
 const timelineMeta = document.getElementById("timelineMeta");
+const legend = document.getElementById("legend");
 
 const svg = d3.select("#timelineSvg");
 const tooltip = d3
@@ -86,53 +84,22 @@ pastBackground.enter().append("rect").attr("class", "past-background");
 
 let snapshots = [];
 let activeIndex = 0;
-let animationHandle = null;
-let isPlaying = false;
 let activeScenarioName = "";
 let scenarioManifest = null;
 const inlineManifestFiles = embeddedInlineFiles || {};
+let stateButtons = [];
 
 if (scenarioSelect) {
   scenarioSelect.addEventListener("change", handleScenarioSelect);
 }
 
-if (folderInput) {
-  folderInput.addEventListener("change", handleFolderSelection);
-}
-
-prevButton.addEventListener("click", () => {
-  stopPlayback();
-  goToSnapshot(activeIndex - 1);
-});
-nextButton.addEventListener("click", () => {
-  stopPlayback();
-  goToSnapshot(activeIndex + 1);
-});
-playPauseButton.addEventListener("click", togglePlayback);
-
 window.addEventListener("beforeunload", () => {
-  stopPlayback();
   tooltip.remove();
 });
 
 initializeScenarioManifest();
 
-function updateControlsState() {
-  const hasSnapshots = snapshots.length > 0;
-  const hasMultipleSnapshots = snapshots.length > 1;
 
-  prevButton.disabled = !hasMultipleSnapshots;
-  nextButton.disabled = !hasMultipleSnapshots;
-  playPauseButton.disabled = !hasMultipleSnapshots;
-
-  if (!hasMultipleSnapshots) {
-    stopPlayback();
-  }
-
-  if (!hasSnapshots) {
-    playPauseButton.textContent = "Play";
-  }
-}
 
 async function handleFolderSelection(event) {
   stopPlayback();
@@ -147,7 +114,6 @@ async function handleFolderSelection(event) {
     activeScenarioName = "";
     clearVisualization();
     statusMessage.textContent = "No XML files found in the selected scenario folder.";
-    updateControlsState();
     return;
   }
 
@@ -176,7 +142,6 @@ async function handleFolderSelection(event) {
     activeScenarioName = "";
     clearVisualization();
     statusMessage.textContent = `Failed to load scenario: ${error.message}`;
-    updateControlsState();
   }
 }
 
@@ -186,10 +151,8 @@ async function handleScenarioSelect(event) {
   if (!scenarioId) {
     snapshots = [];
     activeScenarioName = "";
-    stopPlayback();
     clearVisualization();
     statusMessage.textContent = DEFAULT_STATUS_MESSAGE;
-    updateControlsState();
     return;
   }
 
@@ -209,10 +172,6 @@ async function handleScenarioSelect(event) {
 
   try {
     statusMessage.textContent = `Loading scenario ${scenarioEntry.label || scenarioEntry.id}…`;
-
-    if (folderInput) {
-      folderInput.value = "";
-    }
 
     const scenarioBaseUrl = new URL(
       `../${sanitizeBasePath(scenarioManifest.basePath)}/${scenarioEntry.id}/`,
@@ -245,13 +204,12 @@ async function handleScenarioSelect(event) {
       scenarioName: scenarioEntry.label || scenarioEntry.id,
       stateGroups,
     });
-  } catch (error) {
+   } catch (error) {
     console.error(error);
     snapshots = [];
     activeScenarioName = "";
     clearVisualization();
     statusMessage.textContent = `Failed to load scenario: ${error.message}`;
-    updateControlsState();
   }
 }
 
@@ -388,14 +346,10 @@ async function loadScenarioFromStateGroups({ scenarioName, stateGroups }) {
   if (!Array.isArray(stateGroups) || !stateGroups.length) {
     snapshots = [];
     activeScenarioName = scenarioName;
-    stopPlayback();
     clearVisualization();
     statusMessage.textContent = "No state folders were found inside the scenario.";
-    updateControlsState();
     return;
   }
-
-  stopPlayback();
 
   try {
     const builtSnapshots = [];
@@ -419,7 +373,6 @@ async function loadScenarioFromStateGroups({ scenarioName, stateGroups }) {
       activeScenarioName = scenarioName;
       clearVisualization();
       statusMessage.textContent = "No usable timeline entries were found in the scenario.";
-      updateControlsState();
       return;
     }
 
@@ -427,14 +380,13 @@ async function loadScenarioFromStateGroups({ scenarioName, stateGroups }) {
     activeScenarioName = scenarioName;
     activeIndex = 0;
     renderSnapshot(snapshots[activeIndex]);
-    updateControlsState();
+    createStateButtons();
     statusMessage.textContent = `Loaded scenario ${scenarioName} with ${snapshots.length} state${snapshots.length === 1 ? "" : "s"} (${totalXmlFiles} XML files).`;
   } catch (error) {
     snapshots = [];
     activeScenarioName = scenarioName;
     clearVisualization();
     statusMessage.textContent = `Failed to load scenario: ${error.message}`;
-    updateControlsState();
     throw error;
   }
 }
@@ -608,7 +560,6 @@ function parseTimelineXml(xmlText, file) {
       return {
         instrumentId,
         instrumentType,
-        folder: instrumentId.split("/")[0] || instrumentId,
         versions: filteredVersions.sort(compareVersions),
       };
     })
@@ -666,47 +617,59 @@ async function buildSnapshotFromState({ scenarioName, stateName, files }) {
   );
 
    for (const file of sortedFiles) {
-     const xmlText = await file.text();
-     const parsed = parseTimelineXml(xmlText, file);
+      const xmlText = await file.text();
+      const parsed = parseTimelineXml(xmlText, file);
 
-     const segments = (file.webkitRelativePath || file.name).split(/[/\\]+/);
-     const folder = segments[segments.length - 2] || "unknown";
+      const segments = (file.webkitRelativePath || file.name).split(/[/\\]+/);
+      const folder = segments[segments.length - 2] || "unknown";
+      const fileName = segments[segments.length - 1] || "";
+      const tail = fileName.replace(/\.xml$/, "");
 
-     sourceFiles.push(parsed.meta.sourceFile);
-     publications.push({
-       publicationId: parsed.meta.publicationId,
-       publicationDate: parsed.meta.publicationDate,
-       instrumentId: parsed.meta.instrumentId,
-       instrumentType: parsed.meta.instrumentType,
-     });
+      sourceFiles.push(parsed.meta.sourceFile);
+      publications.push({
+        publicationId: parsed.meta.publicationId,
+        publicationDate: parsed.meta.publicationDate,
+        instrumentId: parsed.meta.instrumentId,
+        instrumentType: parsed.meta.instrumentType,
+      });
 
-     parsed.instruments.forEach((instrument) => {
-       instrument.folder = folder;
-       instrument.displayName = buildInstrumentLabel(instrument.instrumentId, instrument.instrumentType, instrument.folder);
+      parsed.instruments.forEach((instrument) => {
+        instrument.folder = folder;
+        instrument.tail = tail;
+        instrument.displayName = buildInstrumentLabel(instrument.instrumentId, instrument.instrumentType, instrument.folder, instrument.tail);
+        instrument.shortLabel = buildShortLabel(instrument.instrumentId, instrument.instrumentType, instrument.folder, instrument.tail);
 
-       const existing = instrumentsById.get(instrument.instrumentId);
+        const existing = instrumentsById.get(instrument.instrumentId);
 
-       if (!existing) {
-         instrumentsById.set(instrument.instrumentId, {
-           ...instrument,
-           versions: [...instrument.versions],
-         });
-         return;
-       }
+        if (!existing) {
+          instrumentsById.set(instrument.instrumentId, {
+            ...instrument,
+            versions: [...instrument.versions],
+          });
+          return;
+        }
 
-       existing.versions = mergeVersions(existing.versions, instrument.versions);
-       existing.instrumentType = prioritizeInstrumentType(
-         existing.instrumentType,
-         instrument.instrumentType,
-       );
-       existing.folder = folder; // ensure folder is set
-       existing.displayName = buildInstrumentLabel(
-         existing.instrumentId,
-         existing.instrumentType,
-         existing.folder,
-       );
-     });
-  }
+        existing.versions = mergeVersions(existing.versions, instrument.versions);
+        existing.instrumentType = prioritizeInstrumentType(
+          existing.instrumentType,
+          instrument.instrumentType,
+        );
+        existing.folder = folder; // ensure folder is set
+        existing.tail = tail;
+        existing.displayName = buildInstrumentLabel(
+          existing.instrumentId,
+          existing.instrumentType,
+          existing.folder,
+          existing.tail,
+        );
+        existing.shortLabel = buildShortLabel(
+          existing.instrumentId,
+          existing.instrumentType,
+          existing.folder,
+          existing.tail,
+        );
+      });
+   }
 
   const instruments = Array.from(instrumentsById.values()).sort(compareInstruments);
 
@@ -772,7 +735,7 @@ function instrumentTypeWeight(type) {
   if (type === "regeling") {
     return 0;
   }
-  if (type === "informatie-object") {
+  if (type === "informatieobject") {
     return 1;
   }
   return 2;
@@ -901,26 +864,31 @@ function renderSnapshot(snapshot) {
         `translate(${xScale(d.instrumentId) + xScale.bandwidth() / 2},0)`,
     );
 
-  instrumentEnter
-    .append("text")
-    .attr("class", "instrument__label")
-    .attr("text-anchor", "middle")
-    .attr("y", margin.top - 25)
-    .text((d) => d.displayName);
+   instrumentEnter
+     .append("text")
+     .attr("class", "instrument__label")
+     .attr("text-anchor", "middle")
+     .attr("y", margin.top - 25)
+     .text((d) => d.shortLabel);
 
-  instrumentSelection
-    .merge(instrumentEnter)
-    .transition()
-    .duration(TRANSITION_DURATION_MS)
-    .attr(
-      "transform",
-      (d) =>
-        `translate(${xScale(d.instrumentId) + xScale.bandwidth() / 2},0)`,
-    )
-    .select(".instrument__label")
-    .text((d) => d.displayName);
+   instrumentSelection
+     .merge(instrumentEnter)
+     .transition()
+     .duration(TRANSITION_DURATION_MS)
+     .attr(
+       "transform",
+       (d) =>
+         `translate(${xScale(d.instrumentId) + xScale.bandwidth() / 2},0)`,
+     )
+     .select(".instrument__label")
+     .text((d) => d.shortLabel);
 
-  instrumentSelection.exit().remove();
+   instrumentSelection
+     .merge(instrumentEnter)
+     .on("mouseenter", (event, d) => highlightLegend(d.instrumentId))
+     .on("mouseleave", () => unhighlightLegend());
+
+   instrumentSelection.exit().remove();
 
   instrumentsGroup
     .selectAll(".instrument")
@@ -1093,50 +1061,96 @@ function renderSnapshot(snapshot) {
   updateSnapshotHeading(snapshot);
 }
 
+function renderLegend(instruments) {
+  if (!legend) return;
+
+  legend.innerHTML = "";
+
+  instruments.forEach(instrument => {
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.setAttribute("data-instrument-id", instrument.instrumentId);
+    item.textContent = `${instrument.shortLabel}: ${instrument.instrumentId}`;
+    legend.appendChild(item);
+  });
+}
+
+function highlightLegend(instrumentId) {
+  if (!legend) return;
+  const items = legend.querySelectorAll(".legend-item");
+  items.forEach(item => {
+    if (item.getAttribute("data-instrument-id") === instrumentId) {
+      item.classList.add("legend-item--highlighted");
+    } else {
+      item.classList.remove("legend-item--highlighted");
+    }
+  });
+}
+
+function unhighlightLegend() {
+  if (!legend) return;
+  const items = legend.querySelectorAll(".legend-item");
+  items.forEach(item => item.classList.remove("legend-item--highlighted"));
+}
+
+function createStateButtons() {
+  stateButtons = [];
+  stateButtonsContainer.innerHTML = "";
+  if (snapshots.length > 1) {
+    // Add '<' button
+    const prevBtn = document.createElement("button");
+    prevBtn.textContent = "<";
+    prevBtn.addEventListener("click", () => goToSnapshot(activeIndex - 1));
+    stateButtonsContainer.appendChild(prevBtn);
+
+    // Add state buttons
+    snapshots.forEach((snapshot, index) => {
+      const btn = document.createElement("button");
+      btn.textContent = snapshot.meta.stateName;
+      btn.addEventListener("click", () => goToSnapshot(index));
+      stateButtons.push(btn);
+      stateButtonsContainer.appendChild(btn);
+    });
+
+    // Add '>' button
+    const nextBtn = document.createElement("button");
+    nextBtn.textContent = ">";
+    nextBtn.addEventListener("click", () => goToSnapshot(activeIndex + 1));
+    stateButtonsContainer.appendChild(nextBtn);
+
+    updateActiveButton();
+  }
+}
+
+function updateActiveButton() {
+  stateButtons.forEach((btn, idx) => {
+    if (idx === activeIndex) {
+      btn.classList.add("active");
+    } else {
+      btn.classList.remove("active");
+    }
+  });
+}
+
 function goToSnapshot(index) {
   if (!snapshots.length) {
     return;
   }
   activeIndex = (index + snapshots.length) % snapshots.length;
   renderSnapshot(snapshots[activeIndex]);
+  updateActiveButton();
 }
 
-function togglePlayback() {
-  if (!snapshots.length) {
-    return;
-  }
-  if (isPlaying) {
-    stopPlayback();
-  } else {
-    startPlayback();
-  }
-}
 
-function startPlayback() {
-  if (isPlaying || snapshots.length <= 1) {
-    return;
-  }
-  isPlaying = true;
-  playPauseButton.textContent = "Pause";
-  animationHandle = window.setInterval(() => {
-    goToSnapshot(activeIndex + 1);
-  }, ANIMATION_INTERVAL_MS);
-}
-
-function stopPlayback() {
-  if (animationHandle) {
-    window.clearInterval(animationHandle);
-    animationHandle = null;
-  }
-  isPlaying = false;
-  playPauseButton.textContent = "Play";
-}
 
 function clearVisualization() {
   instrumentsGroup.selectAll("*").remove();
   axisGroup.selectAll("*").remove();
   timelineTitle.textContent = "Timeline";
   timelineMeta.textContent = "";
+  if (legend) legend.innerHTML = "";
+  stateButtonsContainer.innerHTML = "";
+  stateButtons = [];
 }
 
 function updateSnapshotHeading(snapshot) {
@@ -1233,17 +1247,25 @@ function parseDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function buildInstrumentLabel(instrumentId, instrumentType, folder) {
-  const tail = instrumentId ? instrumentId.split("/").slice(-1)[0] : "onbekend";
+function buildInstrumentLabel(instrumentId, instrumentType, folder, tail) {
   const labelType =
     instrumentType === "regeling"
       ? "Regulation"
-      : instrumentType === "informatie-object"
+      : instrumentType === "informatieobject"
         ? "Attachment"
         : instrumentType
         ? capitalize(instrumentType)
         : "Instrument";
   return `${labelType} • ${folder} • ${tail}`;
+}
+
+function buildShortLabel(instrumentId, instrumentType, folder, tail) {
+  if (instrumentType === "regeling") {
+    return folder;
+  } else if (instrumentType === "informatieobject") {
+    return folder + tail;
+  }
+  return tail;
 }
 
 function capitalize(value) {

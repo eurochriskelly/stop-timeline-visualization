@@ -19,24 +19,19 @@
             <option value="">Select scenario…</option>
           </select>
         </label>
-        <label class="controls__picker">
-          <span>Load custom folder</span>
-          <input type="file" id="folderInput" webkitdirectory multiple />
-        </label>
         <div class="controls__buttons">
-          <button id="prevButton" type="button" disabled>Previous</button>
-          <button id="playPauseButton" type="button" disabled>Play</button>
-          <button id="nextButton" type="button" disabled>Next</button>
+          <div id="stateButtons"></div>
         </div>
         <div class="controls__status" id="statusMessage">Select a scenario to begin.</div>
       </section>
       <section class="visualization">
-        <div class="visualization__header">
-          <h2 id="timelineTitle">Timeline</h2>
-          <span id="timelineMeta"></span>
-        </div>
-        <svg id="timelineSvg" role="img" aria-labelledby="timelineTitle timelineMeta"></svg>
-      </section>
+         <div class="visualization__header">
+           <h2 id="timelineTitle">Timeline</h2>
+           <span id="timelineMeta"></span>
+         </div>
+         <div id="legend" class="legend"></div>
+         <svg id="timelineSvg" role="img" aria-labelledby="timelineTitle timelineMeta"></svg>
+       </section>
     </main>
     <script type="module" src="src/main.js"></script>
   </body>
